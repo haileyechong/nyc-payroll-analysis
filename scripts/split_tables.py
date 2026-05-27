@@ -9,6 +9,29 @@ def main():
 
     df = pd.read_csv(INPUT_PATH, low_memory=False)
 
+    # Extra cleanup before creating lookup tables
+    text_cols = [
+        "agency_name",
+        "title_description",
+        "work_location_borough",
+        "first_name",
+        "last_name",
+        "middle_initial",
+        "leave_status",
+        "pay_basis"
+    ]
+
+    for col in text_cols:
+        df[col] = (
+            df[col]
+            .fillna("UNKNOWN")
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+    df["middle_initial"] = df["middle_initial"].replace("UNKNOWN", "")
+
     # Make sure dates are formatted correctly for MySQL
     df["agency_start_date"] = pd.to_datetime(
         df["agency_start_date"],
@@ -19,10 +42,12 @@ def main():
    
     agencies = (
         df[["agency_name"]]
+        .dropna()
         .drop_duplicates()
         .sort_values("agency_name")
         .reset_index(drop=True)
-    )
+    )   
+    
     agencies["agency_id"] = agencies.index + 1
     agencies = agencies[["agency_id", "agency_name"]]
 
@@ -33,14 +58,15 @@ def main():
     # Job titles table
   
     job_titles = (
-        df[["title_description"]]
-        .drop_duplicates()
-        .sort_values("title_description")
-        .reset_index(drop=True)
+    df[["title_description"]]
+    .dropna()
+    .drop_duplicates()
+    .sort_values("title_description")
+    .reset_index(drop=True)
     )
     job_titles["title_id"] = job_titles.index + 1
     job_titles = job_titles[["title_id", "title_description"]]
-
+    
     title_map = dict(zip(job_titles["title_description"], job_titles["title_id"]))
     df["title_id"] = df["title_description"].map(title_map)
 
@@ -49,10 +75,12 @@ def main():
 
     work_locations = (
         df[["work_location_borough"]]
+        .dropna()
         .drop_duplicates()
         .sort_values("work_location_borough")
         .reset_index(drop=True)
     )
+    
     work_locations["location_id"] = work_locations.index + 1
     work_locations = work_locations[["location_id", "work_location_borough"]]
 

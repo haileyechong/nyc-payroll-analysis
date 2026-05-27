@@ -63,13 +63,8 @@ CREATE TABLE payroll_records (
     FOREIGN KEY (agency_id) REFERENCES agencies(agency_id),
     FOREIGN KEY (title_id) REFERENCES job_titles(title_id),
     FOREIGN KEY (location_id) REFERENCES work_locations(location_id),
-    FOREIGN KEY (fiscal_year_id) REFERENCES fiscal_years(fiscal_year_id),
-
-    CHECK (regular_hours >= 0),
-    CHECK (overtime_hours >= 0),
-    CHECK (total_hours >= 0),
-    CHECK (overtime_pay_share >= 0),
-    CHECK (overtime_hours_share >= 0)
+    FOREIGN KEY (fiscal_year_id) REFERENCES fiscal_years(fiscal_year_id)
+);
 );
 
 CREATE INDEX idx_payroll_employee ON payroll_records(employee_id);

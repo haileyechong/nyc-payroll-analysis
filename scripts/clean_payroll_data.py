@@ -74,6 +74,34 @@ def main():
     df["overtime_hours_share"] = df["overtime_hours_share"].replace([float("inf"), -float("inf")], 0)
     df["overtime_hours_share"] = df["overtime_hours_share"].fillna(0)
 
+    # Standardize text fields so duplicate categories do not break MySQL UNIQUE constraints
+    text_cols = [
+        "agency_name",
+        "first_name",
+        "last_name",
+        "middle_initial",
+        "work_location_borough",
+        "title_description",
+        "leave_status",
+        "pay_basis"
+    ]
+
+    for col in text_cols:
+        df[col] = (
+            df[col]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+
+# Replace placeholder missing values created by astype(str)
+    df["middle_initial"] = df["middle_initial"].replace("NAN", "")
+    df["work_location_borough"] = df["work_location_borough"].replace("NAN", "UNKNOWN")
+    df["title_description"] = df["title_description"].replace("NAN", "UNKNOWN")
+    df["first_name"] = df["first_name"].replace("NAN", "UNKNOWN")
+    df["last_name"] = df["last_name"].replace("NAN", "UNKNOWN")
+
+
     # Save cleaned dataset
     PROCESSED_PATH.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(PROCESSED_PATH, index=False)
