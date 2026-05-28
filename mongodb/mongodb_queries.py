@@ -54,7 +54,6 @@ pipeline = [
 
 results = list(db['payroll_records'].aggregate(pipeline))
 
-
 #3. Which agencies have a high OT-to-headcount ratio?
 pipeline = [
     {"$group": {
@@ -86,3 +85,27 @@ results = list(db['payroll_records'].aggregate(pipeline))
 for r in results:
     print(r)
 
+
+
+#4. Which job titles have the highest average overtime pay?
+
+pipeline = [
+    {"$match": {"compensation.total_overtime_paid": {"$gt": 0}}},
+    {"$group": {
+        "_id": "$title_snapshot.title_description",
+        "avg_ot_pay": {"$avg": "$compensation.total_overtime_paid"},
+        "total_ot_pay": {"$sum": "$compensation.total_overtime_paid"},
+        "headcount": {"$sum": 1}
+    }},
+    {"$sort": {"avg_ot_pay": -1}},
+    {"$limit": 10},
+    {"$project": {
+        "title": "$_id",
+        "avg_ot_pay": 1,
+        "total_ot_pay": 1,
+        "headcount": 1,
+        "_id": 0
+    }}
+]
+
+results = list(db['payroll_records'].aggregate(pipeline))
