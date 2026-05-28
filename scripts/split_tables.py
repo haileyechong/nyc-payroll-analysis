@@ -103,8 +103,7 @@ def main():
     df["fiscal_year_id"] = df["fiscal_year"].map(fiscal_year_map)
 
   
-    # Employees table
-  
+# Employees table
     employee_cols = [
         "first_name",
         "last_name",
@@ -112,15 +111,27 @@ def main():
         "agency_start_date"
     ]
 
-    df["employee_id"] = df.groupby(employee_cols, sort=False).ngroup() + 1
+    # Make sure missing values do not create null employee IDs
+    df["first_name"] = df["first_name"].fillna("UNKNOWN").astype(str).str.strip().str.upper()
+    df["last_name"] = df["last_name"].fillna("UNKNOWN").astype(str).str.strip().str.upper()
+    df["middle_initial"] = df["middle_initial"].fillna("").astype(str).str.strip().str.upper()
+
+    # Keep agency_start_date as a date-like field, but allow missing dates
+    df["agency_start_date"] = pd.to_datetime(
+        df["agency_start_date"],
+        errors="coerce"
+    ).dt.strftime("%Y-%m-%d")
+
+    # Use dropna=False so rows with missing dates still get an employee_id
+    df["employee_id"] = df.groupby(employee_cols, sort=False, dropna=False).ngroup() + 1
+    df["employee_id"] = df["employee_id"].astype(int)
 
     employees = (
         df[["employee_id"] + employee_cols]
         .drop_duplicates("employee_id")
         .sort_values("employee_id")
     )
-
-   
+    
     # Payroll records fact table
     
     payroll_records = df[[
@@ -142,6 +153,8 @@ def main():
         "total_hours",
         "overtime_hours_share"
     ]].copy()
+
+    payroll_records["employee_id"] = payroll_records["employee_id"].astype(int)
 
     payroll_records.insert(0, "payroll_record_id", range(1, len(payroll_records) + 1))
 

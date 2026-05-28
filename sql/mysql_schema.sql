@@ -65,7 +65,6 @@ CREATE TABLE payroll_records (
     FOREIGN KEY (location_id) REFERENCES work_locations(location_id),
     FOREIGN KEY (fiscal_year_id) REFERENCES fiscal_years(fiscal_year_id)
 );
-);
 
 CREATE INDEX idx_payroll_employee ON payroll_records(employee_id);
 CREATE INDEX idx_payroll_agency ON payroll_records(agency_id);
