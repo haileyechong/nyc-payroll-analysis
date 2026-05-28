@@ -1,21 +1,19 @@
 import pandas as pd
 from pymongo import MongoClient
-import pprint
-from bson import ObjectId
 
-# load data
-payroll_data = pd.read_csv('Citywide_Payroll_Data_2025.csv')
-payroll_data.head()
+payroll_data = pd.read_csv('/Users/teafanknee/Downloads/nyc_payroll_cleaned.csv')
 
-# Connect
 client = MongoClient('localhost', 27017)
 db = client['NYC_Payroll']
 
-# Load
+# Drop existing collections to avoid duplicates on re-load
+for col in ['agencies', 'job_titles', 'work_locations', 'employees', 'payroll_records']:
+    db[col].drop()
+
 payroll_data.columns = payroll_data.columns.str.strip().str.lower().str.replace(' ', '_')
 
-# 1. Agencies
-agencies_records = payroll_data[['payroll_number', 'agency_name']].drop_duplicates().to_dict('records')
+# 1. Agencies (payroll_number removed from source data)
+agencies_records = payroll_data[['agency_name']].drop_duplicates().to_dict('records')
 db['agencies'].insert_many(agencies_records)
 
 # 2. Job titles
@@ -27,9 +25,7 @@ work_locations_records = payroll_data[['work_location_borough']].drop_duplicates
 db['work_locations'].insert_many(work_locations_records)
 
 # 4. Employees
-employees_records = payroll_data[['first_name', 'last_name', 'mid_init', 'agency_start_date']].drop_duplicates().rename(columns={
-    'mid_init': 'middle_initial'
-}).to_dict('records')
+employees_records = payroll_data[['first_name', 'last_name', 'middle_initial', 'agency_start_date']].drop_duplicates().to_dict('records')
 db['employees'].insert_many(employees_records)
 
 # 5. Build lookup maps
@@ -47,20 +43,25 @@ for _, row in payroll_data.iterrows():
         'title_id': title_map.get(row['title_description']),
         'location_id': location_map.get(row['work_location_borough']),
         'fiscal_year': row['fiscal_year'],
-        'leave_status': row['leave_status_as_of_june_30'],
+        'leave_status': row['leave_status'],
         'compensation': {
             'base_salary': row['base_salary'],
             'pay_basis': row['pay_basis'],
             'regular_hours': row['regular_hours'],
             'regular_gross_paid': row['regular_gross_paid'],
-            'overtime_hours': row['ot_hours'],
-            'total_overtime_paid': row['total_ot_paid'],
-            'total_other_pay': row['total_other_pay']
+            'overtime_hours': row['overtime_hours'],
+            'total_overtime_paid': row['total_overtime_paid'],
+            'total_other_pay': row['total_other_pay'],
+            'total_compensation': row['total_compensation'],
+            'overtime_pay_share': row['overtime_pay_share'],
+            'total_hours': row['total_hours'],
+            'overtime_hours_share': row['overtime_hours_share']
         },
-        'agency_snapshot': {'payroll_number': row['payroll_number'], 'agency_name': row['agency_name']},
+        'agency_snapshot': {'agency_name': row['agency_name']},
         'title_snapshot': {'title_description': row['title_description']},
         'location_snapshot': {'work_location_borough': row['work_location_borough']}
     }
     payroll_records.append(record)
 
-db['payroll_records'].insert_many(payroll_records);
+db['payroll_records'].insert_many(payroll_records)
+print(f"Loaded {len(payroll_records)} records across fiscal years: {sorted(payroll_data['fiscal_year'].unique())}")
