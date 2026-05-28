@@ -1,6 +1,7 @@
 data/raw/
 data/processed/
 *.csv
+!mongodb/results/*.csv
 *.xlsx
 *.db
 .env
