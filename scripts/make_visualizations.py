@@ -9,14 +9,10 @@ from matplotlib.ticker import FuncFormatter
 from sqlalchemy import create_engine
 
 
-# =========================================================
-# CONFIG
-# =========================================================
-
 DB_NAME = "nyc_payroll"
 MYSQL_USER = "root"
 
-OUTPUT_DIR = Path("reports/figures")
+OUTPUT_DIR = Path("reports/SQL_figures")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Consistent visual theme
@@ -29,10 +25,6 @@ ACCENT = "#2563EB"       # main blue used across all charts
 ACCENT_DARK = "#1E3A8A"  # darker blue for second line in trend chart
 
 
-# =========================================================
-# MYSQL CONNECTION
-# =========================================================
-
 def get_engine():
     password = getpass("Enter MySQL password: ")
     password_encoded = quote_plus(password)
@@ -42,12 +34,12 @@ def get_engine():
     )
 
 
-# =========================================================
-# FORMATTING HELPERS
-# =========================================================
-
 def money_billions(x, pos=None):
     return f"${x / 1_000_000_000:.1f}B"
+
+
+def money_thousands(x, pos=None):
+    return f"${x / 1000:.0f}K"
 
 
 def percent_fmt(x, pos=None):
@@ -57,7 +49,19 @@ def percent_fmt(x, pos=None):
 def clean_display_label(label):
     label = str(label).strip()
 
-    # Remove trailing punctuation that looks bad on charts
+    label_replacements = {
+        "WARDEN-ASSISTANT DEPUTY WARDEN TED < 11/1/92": "Warden / Assistant Deputy Warden",
+        "LIEUTENANT D/A COMMANDER OF DETECTIVE SQUAD": "Lieutenant / Detective Squad Commander",
+        "POLICE OFFICER D/A DETECTIVE 1ST GR": "Detective 1st Grade",
+        "POLICE OFFICER D/A DETECTIVE 2ND GR": "Detective 2nd Grade",
+        "CAPTAIN D/A DEPUTY CHIEF": "Captain / Deputy Chief",
+        "CAPTAIN D/A INSPECTOR": "Captain / Inspector",
+        "LIEUTENANT D/A SPECIAL ASSIGNMENT": "Lieutenant / Special Assignment",
+    }
+
+    if label.upper() in label_replacements:
+        return label_replacements[label.upper()]
+
     label = label.rstrip("-–— ")
 
     return label.title()
@@ -66,6 +70,7 @@ def clean_display_label(label):
 def wrap_label(label, width=28):
     cleaned = clean_display_label(label)
     return "\n".join(textwrap.wrap(cleaned, width=width))
+
 
 def clean_chart(ax):
     ax.set_facecolor(BG)
@@ -109,10 +114,9 @@ def save_fig(fig, filename):
     print(f"Saved {path}")
 
 
-# =========================================================
-# CHART 1: TOP OVERTIME SPENDING BY AGENCY
-# =========================================================
 
+# CHART 1: TOP OVERTIME SPENDING BY AGENCY
+# Question: Which agencies spend the most total money on overtime pay?
 def chart_top_overtime_agencies(engine):
     query = """
     SELECT 
@@ -171,10 +175,9 @@ def chart_top_overtime_agencies(engine):
     save_fig(fig, "01_top_overtime_agencies.png")
 
 
-# =========================================================
-# CHART 2: OVERTIME RELIANCE BY AGENCY
-# =========================================================
 
+# CHART 2: OVERTIME RELIANCE BY AGENCY
+# Question: Which agencies rely most heavily on overtime compared to regular gross pay?
 def chart_overtime_reliance(engine):
     query = """
     SELECT 
@@ -239,10 +242,70 @@ def chart_overtime_reliance(engine):
     save_fig(fig, "02_overtime_reliance_by_agency.png")
 
 
-# =========================================================
-# CHART 3: PAYROLL AND OVERTIME TREND
-# =========================================================
 
+# CHART 3: TOTAL COMPENSATION BY AGENCY
+# Question: How much does each agency spend on total compensation?
+def chart_total_compensation_by_agency(engine):
+    query = """
+    SELECT 
+        a.agency_name,
+        SUM(pr.total_compensation) AS total_compensation_spending
+    FROM payroll_records pr
+    JOIN agencies a 
+        ON pr.agency_id = a.agency_id
+    GROUP BY a.agency_name
+    ORDER BY total_compensation_spending DESC
+    LIMIT 10;
+    """
+
+    df = pd.read_sql(query, engine)
+    df = df.sort_values("total_compensation_spending", ascending=True)
+
+    labels = [wrap_label(x, 28) for x in df["agency_name"]]
+
+    fig, ax = plt.subplots(figsize=(11, 7))
+
+    bars = ax.barh(
+        labels,
+        df["total_compensation_spending"],
+        color=ACCENT,
+        height=0.7
+    )
+
+    clean_chart(ax)
+    ax.xaxis.set_major_formatter(FuncFormatter(money_billions))
+    ax.set_xlabel("Total compensation spending", color=MUTED, fontsize=11)
+
+    add_title(
+        fig,
+        "Education and public safety dominate total payroll spending",
+        "Total compensation spending by NYC agency, fiscal years 2024–2025"
+    )
+
+    max_value = df["total_compensation_spending"].max()
+
+    for bar in bars:
+        width = bar.get_width()
+        ax.text(
+            width + max_value * 0.015,
+            bar.get_y() + bar.get_height() / 2,
+            f"${width / 1_000_000_000:.2f}B",
+            va="center",
+            ha="left",
+            fontsize=10,
+            color=TEXT,
+            fontweight="bold"
+        )
+
+    ax.set_xlim(0, max_value * 1.18)
+    fig.subplots_adjust(top=0.84, left=0.31)
+
+    save_fig(fig, "03_total_compensation_by_agency.png")
+
+
+
+# CHART 4: PAYROLL AND OVERTIME TREND
+# Question: How did payroll and overtime spending change from 2024 to 2025?
 def chart_yearly_trend(engine):
     query = """
     SELECT 
@@ -324,108 +387,31 @@ def chart_yearly_trend(engine):
 
     fig.subplots_adjust(top=0.82)
 
-    save_fig(fig, "03_yearly_payroll_overtime_trend.png")
+    save_fig(fig, "04_yearly_payroll_overtime_trend.png")
 
 
-# =========================================================
-# CHART 4: OVERTIME-HEAVY JOB TITLES
-# =========================================================
 
-def chart_overtime_job_titles(engine):
+# CHART 5: HIGHEST AVERAGE OVERTIME PAY BY JOB TITLE
+# Question: Which job titles have the highest average overtime pay?
+def chart_avg_overtime_pay_by_title(engine):
     query = """
     SELECT 
         jt.title_description,
         COUNT(*) AS payroll_record_count,
-        SUM(pr.regular_hours) AS total_regular_hours,
-        SUM(pr.overtime_hours) AS total_overtime_hours,
-        SUM(pr.total_hours) AS total_hours,
-        SUM(pr.overtime_hours) / NULLIF(SUM(pr.total_hours), 0) AS overtime_hours_share
+        AVG(pr.total_overtime_paid) AS avg_overtime_paid
     FROM payroll_records pr
     JOIN job_titles jt 
         ON pr.title_id = jt.title_id
     WHERE 
-        pr.regular_hours >= 0
-        AND pr.overtime_hours >= 0
-        AND pr.total_hours > 0
-    GROUP BY jt.title_description
-    HAVING 
-        COUNT(*) >= 100
-        AND SUM(pr.regular_hours) >= 100000
-    ORDER BY overtime_hours_share DESC
-    LIMIT 10;
-    """
-
-    df = pd.read_sql(query, engine)
-
-    df["overtime_hours_percent"] = df["overtime_hours_share"] * 100
-    df = df.sort_values("overtime_hours_percent", ascending=True)
-
-    labels = [wrap_label(x, 30) for x in df["title_description"]]
-
-    fig, ax = plt.subplots(figsize=(11, 7))
-
-    bars = ax.barh(
-        labels,
-        df["overtime_hours_percent"],
-        color=ACCENT,
-        height=0.7
-    )
-
-    clean_chart(ax)
-
-    ax.xaxis.set_major_formatter(FuncFormatter(percent_fmt))
-    ax.set_xlabel("Overtime hours as % of total recorded hours", color=MUTED, fontsize=11)
-
-    add_title(
-        fig,
-        "Overtime-heavy roles cluster in public safety and operations",
-        "Job titles with the highest overtime share of total recorded hours"
-    )
-
-    max_value = df["overtime_hours_percent"].max()
-
-    for bar in bars:
-        width = bar.get_width()
-        ax.text(
-            width + max_value * 0.015,
-            bar.get_y() + bar.get_height() / 2,
-            f"{width:.1f}%",
-            va="center",
-            ha="left",
-            fontsize=10,
-            color=TEXT,
-            fontweight="bold"
-        )
-
-    ax.set_xlim(0, min(100, max_value * 1.15))
-    fig.subplots_adjust(top=0.84, left=0.33)
-
-    save_fig(fig, "04_overtime_heavy_job_titles.png")
-
-
-# =========================================================
-# CHART 5: HIGHEST AVERAGE COMPENSATION
-# =========================================================
-
-def chart_highest_compensation_titles(engine):
-    query = """
-    SELECT 
-        jt.title_description,
-        AVG(pr.total_compensation) AS avg_total_compensation,
-        COUNT(*) AS payroll_record_count
-    FROM payroll_records pr
-    JOIN job_titles jt 
-        ON pr.title_id = jt.title_id
-    WHERE 
-        pr.pay_basis = 'PER ANNUM'
+        pr.total_overtime_paid > 0
     GROUP BY jt.title_description
     HAVING COUNT(*) >= 100
-    ORDER BY avg_total_compensation DESC
+    ORDER BY avg_overtime_paid DESC
     LIMIT 10;
     """
 
     df = pd.read_sql(query, engine)
-    df = df.sort_values("avg_total_compensation", ascending=True)
+    df = df.sort_values("avg_overtime_paid", ascending=True)
 
     labels = [wrap_label(x, 30) for x in df["title_description"]]
 
@@ -433,26 +419,22 @@ def chart_highest_compensation_titles(engine):
 
     bars = ax.barh(
         labels,
-        df["avg_total_compensation"],
+        df["avg_overtime_paid"],
         color=ACCENT,
         height=0.7
     )
 
     clean_chart(ax)
-
-    ax.xaxis.set_major_formatter(
-        FuncFormatter(lambda x, pos: f"${x / 1000:.0f}K")
-    )
-
-    ax.set_xlabel("Average total compensation", color=MUTED, fontsize=11)
+    ax.xaxis.set_major_formatter(FuncFormatter(money_thousands))
+    ax.set_xlabel("Average overtime pay", color=MUTED, fontsize=11)
 
     add_title(
         fig,
-        "Highest average compensation is concentrated in senior roles",
-        "Annual-salary job titles ranked by average total compensation"
+        "Specialized and supervisory roles have the highest average overtime pay",
+        "Average overtime pay by job title among records with overtime pay, fiscal years 2024–2025"
     )
 
-    max_value = df["avg_total_compensation"].max()
+    max_value = df["avg_overtime_paid"].max()
 
     for bar in bars:
         width = bar.get_width()
@@ -470,21 +452,18 @@ def chart_highest_compensation_titles(engine):
     ax.set_xlim(0, max_value * 1.18)
     fig.subplots_adjust(top=0.84, left=0.34)
 
-    save_fig(fig, "05_highest_avg_compensation_titles.png")
+    save_fig(fig, "05_avg_overtime_pay_by_title.png")
 
 
-# =========================================================
-# MAIN
-# =========================================================
 
 def main():
     engine = get_engine()
 
     chart_top_overtime_agencies(engine)
     chart_overtime_reliance(engine)
+    chart_total_compensation_by_agency(engine)
     chart_yearly_trend(engine)
-    chart_overtime_job_titles(engine)
-    chart_highest_compensation_titles(engine)
+    chart_avg_overtime_pay_by_title(engine)
 
     print("\nDone. Slide-ready charts saved in:")
     print(OUTPUT_DIR)
