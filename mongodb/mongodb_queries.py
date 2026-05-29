@@ -53,28 +53,36 @@ df.to_csv(path, index=False)
 
 
 # 2. Which employees earned the most in overtime pay?
-
 pipeline = [
-    {"$match": {"compensation.total_overtime_paid": {"$gt": 0}}},
-    {"$group": {
-        "_id": "$employee_id",
-        "agency": {"$first": "$agency_snapshot.agency_name"},
-        "title": {"$first": "$title_snapshot.title_description"},
-        "total_overtime_paid": {"$sum": "$compensation.total_overtime_paid"},
-        "total_overtime_hours": {"$sum": "$compensation.overtime_hours"},
-        "payroll_record_count": {"$sum": 1}
-    }},
-    {"$sort": {"total_overtime_paid": -1}},
-    {"$project": {
-        "_id": 0,
-        "employee_id": {"$toString": "$_id"},
-        "agency": 1,
-        "title": 1,
-        "total_overtime_paid": 1,
-        "total_overtime_hours": 1,
-        "payroll_record_count": 1
-    }},
-    {"$limit": 25}
+    {
+        "$match": {
+            "compensation.total_overtime_paid": {"$gt": 0}
+        }
+    },
+    {
+        "$group": {
+            "_id": "$title_snapshot.title_description",
+            "payroll_record_count": {"$sum": 1},
+            "avg_overtime_paid": {
+                "$avg": "$compensation.total_overtime_paid"
+            }
+        }
+    },
+    {
+        "$match": {
+            "payroll_record_count": {"$gte": 100}
+        }
+    },
+    {"$sort": {"avg_overtime_paid": -1}},
+    {"$limit": 10},
+    {
+        "$project": {
+            "_id": 0,
+            "title_description": "$_id",
+            "payroll_record_count": 1,
+            "avg_overtime_paid": 1
+        }
+    }
 ]
 
 results = list(db['payroll_records'].aggregate(pipeline))
