@@ -56,23 +56,31 @@ df.to_csv(path, index=False)
 
 pipeline = [
     {"$match": {"compensation.total_overtime_paid": {"$gt": 0}}},
-    {"$sort": {"compensation.total_overtime_paid": -1}},
+    {"$group": {
+        "_id": "$employee_id",
+        "agency": {"$first": "$agency_snapshot.agency_name"},
+        "title": {"$first": "$title_snapshot.title_description"},
+        "total_overtime_paid": {"$sum": "$compensation.total_overtime_paid"},
+        "total_overtime_hours": {"$sum": "$compensation.overtime_hours"},
+        "payroll_record_count": {"$sum": 1}
+    }},
+    {"$sort": {"total_overtime_paid": -1}},
     {"$project": {
         "_id": 0,
-        "employee_id": {"$toString": "$employee_id"},
-        "agency": "$agency_snapshot.agency_name",
-        "title": "$title_snapshot.title_description",
-        "fiscal_year": 1,
-        "total_overtime_paid": "$compensation.total_overtime_paid",
-        "overtime_hours": "$compensation.overtime_hours",
-    }}
+        "employee_id": {"$toString": "$_id"},
+        "agency": 1,
+        "title": 1,
+        "total_overtime_paid": 1,
+        "total_overtime_hours": 1,
+        "payroll_record_count": 1
+    }},
+    {"$limit": 25}
 ]
 
 results = list(db['payroll_records'].aggregate(pipeline))
 df = pd.DataFrame(results)
 path = os.path.join(output_dir, 'q2_top_ot_earners.csv')
 df.to_csv(path, index=False)
-
 
 # 3. Which agencies have a high OT-to-headcount ratio?
 
@@ -118,6 +126,7 @@ pipeline = [
         "total_ot_pay": {"$sum": "$compensation.total_overtime_paid"},
         "headcount": {"$sum": 1}
     }},
+    {"$match": {"headcount": {"$gte": 100}}},
     {"$sort": {"avg_ot_pay": -1}},
     {"$project": {
         "_id": 0,
@@ -222,15 +231,18 @@ df.to_csv(path, index=False)
 # 8. Which job titles have the highest average total compensation (base + OT + other)?
 
 pipeline = [
-    {"$match": {"compensation.total_compensation": {"$gt": 0}}},
+    {"$match": {
+        "compensation.total_compensation": {"$gt": 0},
+        "compensation.pay_basis": "PER ANNUM"
+    }},
     {"$group": {
         "_id": "$title_snapshot.title_description",
         "avg_total_compensation": {"$avg": "$compensation.total_compensation"},
         "avg_base_salary": {"$avg": "$compensation.base_salary"},
         "avg_ot_paid": {"$avg": "$compensation.total_overtime_paid"},
-        "headcount": {"$sum": 1}
+        "payroll_record_count": {"$sum": 1}
     }},
-    {"$match": {"headcount": {"$gte": 10}}},
+    {"$match": {"payroll_record_count": {"$gte": 100}}},
     {"$sort": {"avg_total_compensation": -1}},
     {"$project": {
         "_id": 0,
@@ -238,7 +250,7 @@ pipeline = [
         "avg_total_compensation": 1,
         "avg_base_salary": 1,
         "avg_ot_paid": 1,
-        "headcount": 1
+        "payroll_record_count": 1
     }}
 ]
 

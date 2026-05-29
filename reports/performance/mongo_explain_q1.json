@@ -1,0 +1,236 @@
+{
+  "explainVersion": "2",
+  "stages": [
+    {
+      "$cursor": {
+        "queryPlanner": {
+          "namespace": "NYC_Payroll.payroll_records",
+          "parsedQuery": {},
+          "indexFilterSet": false,
+          "queryHash": "8297DD48",
+          "planCacheShapeHash": "8297DD48",
+          "planCacheKey": "B9DA1D82",
+          "optimizationTimeMillis": 0,
+          "cursorType": "regular",
+          "maxIndexedOrSolutionsReached": false,
+          "maxIndexedAndSolutionsReached": false,
+          "maxScansToExplodeReached": false,
+          "prunedSimilarIndexes": false,
+          "winningPlan": {
+            "isCached": false,
+            "queryPlan": {
+              "stage": "GROUP",
+              "planNodeId": 3,
+              "inputStage": {
+                "stage": "COLLSCAN",
+                "planNodeId": 1,
+                "filter": {},
+                "nss": "NYC_Payroll.payroll_records",
+                "direction": "forward"
+              }
+            },
+            "slotBasedPlan": {
+              "slots": "$$RESULT=s11 env: {  }",
+              "stages": "[3] project [s11 = newObj(\"_id\", s9, \"total_overtime_spending\", s10)] \n[3] project [s10 = doubleDoubleSumFinalize(s8)] \n[3] group [s9] [s8 = aggDoubleDoubleSum(s5)] spillSlots[s7] mergingExprs[aggMergeDoubleDoubleSums(s7)] \n[3] project [s9 = (s6 ?: null)] \n[3] project [s5 = traverseP(s4, lambda(l3.0) { getField(move(l3.0), \"total_overtime_paid\") }, 1), s6 = traverseP(s3, lambda(l4.0) { getField(move(l4.0), \"agency_name\") }, 1)] \n[1] scan generic [s1 = record, s2 = recordId] [s3 = agency_snapshot, s4 = compensation] @\"01983235-f355-4f4a-81ef-7b73f4aaabca\" "
+            }
+          },
+          "rejectedPlans": []
+        },
+        "executionStats": {
+          "executionSuccess": true,
+          "nReturned": 159,
+          "executionTimeMillis": 612,
+          "totalKeysExamined": 0,
+          "totalDocsExamined": 1113103,
+          "executionStages": {
+            "stage": "project",
+            "planNodeId": 3,
+            "nReturned": 159,
+            "executionTimeMillisEstimate": 607,
+            "opens": 1,
+            "closes": 1,
+            "saveState": 46,
+            "restoreState": 45,
+            "isEOF": 1,
+            "projections": {
+              "11": "newObj(\"_id\", s9, \"total_overtime_spending\", s10) "
+            },
+            "inputStage": {
+              "stage": "project",
+              "planNodeId": 3,
+              "nReturned": 159,
+              "executionTimeMillisEstimate": 607,
+              "opens": 1,
+              "closes": 1,
+              "saveState": 46,
+              "restoreState": 45,
+              "isEOF": 1,
+              "projections": {
+                "10": "doubleDoubleSumFinalize(s8) "
+              },
+              "inputStage": {
+                "stage": "group",
+                "planNodeId": 3,
+                "nReturned": 159,
+                "executionTimeMillisEstimate": 607,
+                "opens": 1,
+                "closes": 1,
+                "saveState": 46,
+                "restoreState": 45,
+                "isEOF": 1,
+                "groupBySlots": [
+                  9
+                ],
+                "expressions": {
+                  "8": "aggDoubleDoubleSum(s5) ",
+                  "initExprs": {
+                    "8": null,
+                    "mergingExprs": {
+                      "7": "aggMergeDoubleDoubleSums(s7) "
+                    }
+                  }
+                },
+                "usedDisk": false,
+                "spills": 0,
+                "spilledBytes": 0,
+                "spilledRecords": 0,
+                "spilledDataStorageSize": 0,
+                "peakTrackedMemBytes": 20881,
+                "inputStage": {
+                  "stage": "project",
+                  "planNodeId": 3,
+                  "nReturned": 1113103,
+                  "executionTimeMillisEstimate": 525,
+                  "opens": 1,
+                  "closes": 1,
+                  "saveState": 46,
+                  "restoreState": 45,
+                  "isEOF": 1,
+                  "projections": {
+                    "9": "(s6 ?: null) "
+                  },
+                  "inputStage": {
+                    "stage": "project",
+                    "planNodeId": 3,
+                    "nReturned": 1113103,
+                    "executionTimeMillisEstimate": 442,
+                    "opens": 1,
+                    "closes": 1,
+                    "saveState": 46,
+                    "restoreState": 45,
+                    "isEOF": 1,
+                    "projections": {
+                      "5": "traverseP(s4, lambda(l3.0) { getField(move(l3.0), \"total_overtime_paid\") }, 1) ",
+                      "6": "traverseP(s3, lambda(l4.0) { getField(move(l4.0), \"agency_name\") }, 1) "
+                    },
+                    "inputStage": {
+                      "stage": "scan",
+                      "planNodeId": 1,
+                      "nReturned": 1113103,
+                      "executionTimeMillisEstimate": 235,
+                      "opens": 1,
+                      "closes": 1,
+                      "saveState": 46,
+                      "restoreState": 45,
+                      "isEOF": 1,
+                      "numReads": 1113103,
+                      "recordSlot": 1,
+                      "recordIdSlot": 2,
+                      "scanFieldNames": [
+                        "agency_snapshot",
+                        "compensation"
+                      ],
+                      "scanFieldSlots": [
+                        3,
+                        4
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "nReturned": 159,
+      "executionTimeMillisEstimate": 612
+    },
+    {
+      "$sort": {
+        "sortKey": {
+          "total_overtime_spending": -1
+        },
+        "limit": 15
+      },
+      "totalDataSizeSortedBytesEstimate": 4400,
+      "usedDisk": false,
+      "spills": 0,
+      "spilledBytes": 0,
+      "spilledRecords": 0,
+      "spilledDataStorageSize": 0,
+      "nReturned": 15,
+      "executionTimeMillisEstimate": 612,
+      "peakTrackedMemBytes": 4434
+    },
+    {
+      "$project": {
+        "total_overtime_spending": true,
+        "agency_name": "$_id",
+        "_id": false
+      },
+      "nReturned": 15,
+      "executionTimeMillisEstimate": 612
+    }
+  ],
+  "queryShapeHash": "4340428941CDBE5DD95B42E35B5E9994D8CF11195A7DD23D77A17BFC711FFB4F",
+  "peakTrackedMemBytes": 20881,
+  "serverInfo": {
+    "host": "Haileys-MBP",
+    "port": 27017,
+    "version": "8.3.2",
+    "gitVersion": "89f54eb32e217d2f7bfcad50e5919f3033bb9611"
+  },
+  "serverParameters": {
+    "internalQueryFacetBufferSizeBytes": 104857600,
+    "internalDocumentSourceGroupMaxMemoryBytes": 104857600,
+    "internalQueryMaxBlockingSortMemoryUsageBytes": 104857600,
+    "internalDocumentSourceSetWindowFieldsMaxMemoryBytes": 104857600,
+    "internalQueryFacetMaxOutputDocSizeBytes": 104857600,
+    "internalLookupStageIntermediateDocumentMaxSizeBytes": 104857600,
+    "internalQueryProhibitBlockingMergeOnMongoS": 0,
+    "internalQueryMaxAddToSetBytes": 104857600,
+    "internalQueryFrameworkControl": "trySbeRestricted",
+    "internalQueryPlannerIgnoreIndexWithCollationForRegex": 1
+  },
+  "command": {
+    "aggregate": "payroll_records",
+    "pipeline": [
+      {
+        "$group": {
+          "_id": "$agency_snapshot.agency_name",
+          "total_overtime_spending": {
+            "$sum": "$compensation.total_overtime_paid"
+          }
+        }
+      },
+      {
+        "$sort": {
+          "total_overtime_spending": -1
+        }
+      },
+      {
+        "$limit": 15
+      },
+      {
+        "$project": {
+          "_id": 0,
+          "agency_name": "$_id",
+          "total_overtime_spending": 1
+        }
+      }
+    ],
+    "cursor": {},
+    "$db": "NYC_Payroll"
+  },
+  "ok": 1.0
+}

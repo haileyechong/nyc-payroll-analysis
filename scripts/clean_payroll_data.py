@@ -9,10 +9,13 @@ from pathlib import Path
 RAW_PATH = Path("data/raw/nyc_payroll_raw.csv")
 OUTPUT_PATH = Path("data/processed/nyc_payroll_cleaned.csv")
 
-# Pick one:
 YEARS_TO_KEEP = [2024, 2025]
 
 CHUNKSIZE = 100_000
+
+# Keep negative values because payroll datasets can include corrections/reversals.
+# Set to True only if your team decides to remove negative payroll adjustment rows.
+REMOVE_NEGATIVE_ROWS = False
 
 
 # =========================================================
@@ -24,8 +27,8 @@ def standardize_column_names(df):
         df.columns
         .str.strip()
         .str.lower()
-        .str.replace(" ", "_")
-        .str.replace("/", "_")
+        .str.replace(" ", "_", regex=False)
+        .str.replace("/", "_", regex=False)
     )
 
     df = df.rename(columns={
@@ -39,14 +42,15 @@ def standardize_column_names(df):
 
 
 def clean_money_column(series):
-    return (
+    cleaned = (
         series.astype(str)
         .str.replace("$", "", regex=False)
         .str.replace(",", "", regex=False)
         .str.strip()
-        .replace(["", "nan", "NaN", "None"], "0")
-        .astype(float)
+        .replace(["", "nan", "NaN", "None", "NONE"], "0")
     )
+
+    return pd.to_numeric(cleaned, errors="coerce").fillna(0)
 
 
 def clean_text_column(series, fill_value="UNKNOWN"):
@@ -56,8 +60,23 @@ def clean_text_column(series, fill_value="UNKNOWN"):
         .astype(str)
         .str.strip()
         .str.upper()
-        .replace({"NAN": fill_value, "NONE": fill_value, "": fill_value})
+        .str.replace(r"\s+", " ", regex=True)   # collapse repeated spaces
+        .replace({
+            "NAN": fill_value,
+            "NONE": fill_value,
+            "NULL": fill_value,
+            "": fill_value
+        })
     )
+
+
+def clean_date_column(series):
+    dates = pd.to_datetime(series, errors="coerce")
+
+    # Treat unrealistic placeholder dates as missing
+    dates = dates.mask(dates >= pd.Timestamp("2100-01-01"))
+
+    return dates
 
 
 def clean_chunk(df):
@@ -110,10 +129,21 @@ def clean_chunk(df):
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
     # Clean date column
-    df["agency_start_date"] = pd.to_datetime(
-        df["agency_start_date"],
-        errors="coerce"
-    )
+    df["agency_start_date"] = clean_date_column(df["agency_start_date"])
+
+    # Optional: remove negative adjustment rows
+    if REMOVE_NEGATIVE_ROWS:
+        numeric_check_cols = [
+            "base_salary",
+            "regular_hours",
+            "regular_gross_paid",
+            "overtime_hours",
+            "total_overtime_paid",
+            "total_other_pay"
+        ]
+
+        for col in numeric_check_cols:
+            df = df[df[col] >= 0].copy()
 
     # Derived fields
     df["total_compensation"] = (
@@ -175,6 +205,9 @@ def clean_chunk(df):
 
     df = df[final_cols]
 
+    # Drop exact duplicate rows inside this chunk
+    df = df.drop_duplicates()
+
     return df
 
 
@@ -189,6 +222,16 @@ def main():
     total_rows = 0
     year_counts = {}
 
+    negative_counts = {
+        "base_salary": 0,
+        "regular_hours": 0,
+        "regular_gross_paid": 0,
+        "overtime_hours": 0,
+        "total_overtime_paid": 0,
+        "total_other_pay": 0,
+        "total_compensation": 0
+    }
+
     print("Cleaning NYC payroll data...")
     print("Raw file:", RAW_PATH)
     print("Years kept:", YEARS_TO_KEEP)
@@ -198,6 +241,11 @@ def main():
 
         if cleaned.empty:
             continue
+
+        # Count negatives for reporting
+        for col in negative_counts:
+            if col in cleaned.columns:
+                negative_counts[col] += int((cleaned[col] < 0).sum())
 
         total_rows += len(cleaned)
 
@@ -214,12 +262,32 @@ def main():
         first_chunk = False
         print(f"Processed rows so far: {total_rows:,}")
 
+    # Final pass to remove exact duplicates across chunks
+    print("\nRemoving exact duplicates across full cleaned file...")
+    final_df = pd.read_csv(OUTPUT_PATH, low_memory=False)
+    before_dedup = len(final_df)
+    final_df = final_df.drop_duplicates()
+    after_dedup = len(final_df)
+    final_df.to_csv(OUTPUT_PATH, index=False)
+
     print("\nCleaned data saved to:", OUTPUT_PATH)
-    print("Total cleaned rows:", total_rows)
+    print("Rows before final duplicate removal:", before_dedup)
+    print("Rows after final duplicate removal:", after_dedup)
+    print("Exact duplicate rows removed:", before_dedup - after_dedup)
 
     print("\nRows by fiscal year:")
-    for year in sorted(year_counts):
-        print(year, year_counts[year])
+    print(final_df["fiscal_year"].value_counts().sort_index())
+
+    print("\nMissing agency_start_date count:")
+    print(final_df["agency_start_date"].isna().sum())
+
+    print("\nNegative value counts, not automatically wrong:")
+    for col, count in negative_counts.items():
+        print(f"{col}: {count}")
+
+    print("\nColumn names:")
+    for col in final_df.columns:
+        print(col)
 
     print("\nDone.")
 
