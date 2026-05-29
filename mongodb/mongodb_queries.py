@@ -247,3 +247,38 @@ df = pd.DataFrame(results)
 path = os.path.join(output_dir, 'q8_title_avg_total_compensation.csv')
 df.to_csv(path, index=False)
 print(f"  -> {len(df)} rows saved to {path}")
+
+
+# 9. How much does each agency spend on total compensation?
+
+pipeline = [
+    {"$group": {
+        "_id": "$agency_snapshot.agency_name",
+        "total_compensation": {"$sum": "$compensation.total_compensation"},
+        "total_regular_gross": {"$sum": "$compensation.regular_gross_paid"},
+        "total_ot_paid": {"$sum": "$compensation.total_overtime_paid"},
+        "total_other_pay": {"$sum": "$compensation.total_other_pay"},
+        "headcount": {"$addToSet": "$employee_id"}
+    }},
+    {"$addFields": {"headcount": {"$size": "$headcount"}}},
+    {"$addFields": {
+        "avg_compensation_per_employee": {"$divide": ["$total_compensation", "$headcount"]}
+    }},
+    {"$sort": {"total_compensation": -1}},
+    {"$project": {
+        "_id": 0,
+        "agency": "$_id",
+        "total_compensation": 1,
+        "total_regular_gross": 1,
+        "total_ot_paid": 1,
+        "total_other_pay": 1,
+        "headcount": 1,
+        "avg_compensation_per_employee": 1
+    }}
+]
+
+results = list(db['payroll_records'].aggregate(pipeline))
+df = pd.DataFrame(results)
+path = os.path.join(output_dir, 'q9_agency_total_compensation.csv')
+df.to_csv(path, index=False)
+print(f"  -> {len(df)} rows saved to {path}")
