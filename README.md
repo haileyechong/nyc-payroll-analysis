@@ -168,16 +168,16 @@ MySQL was still useful because the data has a clear relational structure. Agenci
 The Streamlit dashboard is in:
 
 ```text
-dashboard/streamlit_app.py
+dashboard/app.py
 ```
 
 To run it:
 
 ```bash
-streamlit run dashboard/streamlit_app.py
+streamlit run dashboard/app.py
 ```
 
-The dashboard shows overtime spending, overtime reliance, compensation trends, and job title-level results.
+The dashboard shows overtime spending by agency, job title, and distributed across employees. It also allows the user to filter all of these three visualizations by one of the five boroughs in NYC (or all of them) and by either 2024, 2025, or both years.
 
 ## Repository Structure
 

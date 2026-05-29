@@ -167,8 +167,8 @@ st.plotly_chart(fig1, use_container_width=True)
 
 st.markdown("""
 ### Finding
-Most of the overall overtime spending in concentrated in a few agenices. 
-When looking at all boroughs combined and both 2024 and 2025, we see that the police deparment has the highest overtime spending amount followed by the fire department.
+Most of the overall overtime spending in concentrated in a few agencies. 
+When looking at all boroughs combined and both 2024 and 2025, we see that the police department has the highest overtime spending amount followed by the fire department.
 """)
 
 
